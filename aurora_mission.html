@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>AURORA — Deep Space Mission</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:'Courier New', monospace; user-select:none; -webkit-user-select:none; }
+canvas { display:block; position:fixed; inset:0; z-index:0; }
+
+/* ── INTRO ── */
+#intro {
+  position:fixed; inset:0; z-index:100;
+  background:radial-gradient(ellipse at 50% 40%, #060d20 0%, #000005 100%);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:30px; text-align:center; transition:opacity 1s;
+}
+#intro.hide { opacity:0; pointer-events:none; }
+.logo-ring {
+  width:96px; height:96px; border-radius:50%;
+  border:1px solid rgba(0,200,200,0.4);
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom:26px; animation:spin 20s linear infinite; position:relative;
+}
+.logo-ring::before {
+  content:''; position:absolute; inset:12px; border-radius:50%;
+  border:1px solid rgba(252,100,50,0.3);
+  animation:spin 12s linear infinite reverse;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+.star-icon { font-size:26px; }
+.nasa-text { font-size:clamp(48px,14vw,80px); font-weight:900; letter-spacing:0.2em; color:#fff; line-height:1; }
+.nasa-text span:nth-child(1) { color:#0B3D91; }
+.nasa-text span:nth-child(2) { color:#FC3D21; }
+.nasa-text span:nth-child(4) { color:#0B3D91; }
+.mission-name { font-size:clamp(18px,5vw,32px); letter-spacing:0.5em; color:#C9A84C; margin-top:6px; font-weight:100; }
+.mission-info { font-size:clamp(9px,2.5vw,11px); color:rgba(255,255,255,0.3); letter-spacing:0.2em; margin-top:14px; }
+.mission-desc { font-size:clamp(11px,3vw,14px); color:rgba(255,255,255,0.42); margin-top:10px; max-width:320px; line-height:1.7; font-style:italic; }
+#btn-start {
+  margin-top:34px; padding:15px 50px;
+  background:transparent; border:1px solid #FC3D21; color:#fff;
+  font-size:clamp(12px,3.5vw,15px); letter-spacing:0.4em; text-transform:uppercase;
+  cursor:pointer; -webkit-appearance:none; transition:background 0.2s;
+}
+#btn-start:active { background:#FC3D21; }
+.hint { font-size:clamp(8px,2vw,10px); color:rgba(0,200,200,0.38); letter-spacing:0.28em; margin-top:10px; }
+
+/* ── HUD ── */
+#hud {
+  position:fixed; top:0; left:0; right:0; z-index:20; pointer-events:none;
+  padding:10px 12px 0;
+  background:linear-gradient(to bottom, rgba(0,0,10,0.72), transparent);
+  display:none;
+}
+#hud.show { display:block; }
+.hud-row { display:flex; justify-content:space-between; align-items:flex-start; }
+.hud-col { font-size:clamp(7px,1.9vw,10px); letter-spacing:0.14em; color:rgba(255,255,255,0.38); line-height:1.95; }
+.hud-col .v { color:#00C8C8; }
+.hud-col .vw { color:#E8A020; }
+.hud-col .vc { color:#FC3D21; }
+.hud-mid { text-align:center; }
+.hud-rt { text-align:right; }
+
+/* progress bar */
+#progbar { position:fixed; bottom:0; left:0; right:0; height:3px; background:rgba(255,255,255,0.05); z-index:20; pointer-events:none; }
+#progfill { height:100%; background:linear-gradient(90deg, #C9A84C, #fff8d0); width:0%; box-shadow:0 0 6px #C9A84C; }
+
+/* ── NARRATION ── */
+#narr {
+  position:fixed; bottom:clamp(96px,22vw,126px); left:50%; transform:translateX(-50%);
+  width:min(580px, 88vw); text-align:center; z-index:20; pointer-events:none;
+  font-style:italic; font-size:clamp(13px,3.5vw,17px);
+  color:rgba(255,255,255,0.88); line-height:1.7;
+  text-shadow:0 0 30px #000, 0 0 60px #000;
+  opacity:0; transition:opacity 1.2s;
+}
+#narr.show { opacity:1; }
+
+/* ── PHASE FLASH ── */
+#pf {
+  position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
+  z-index:25; pointer-events:none; text-align:center;
+  opacity:0; transition:opacity 0.7s;
+}
+#pf.show { opacity:1; }
+#pf .pn { font-size:clamp(26px,8vw,52px); font-weight:900; letter-spacing:0.3em; color:#fff; text-transform:uppercase; text-shadow:0 0 40px rgba(0,0,0,0.95); }
+#pf .ps { font-size:clamp(8px,2vw,11px); letter-spacing:0.5em; color:#C9A84C; margin-top:6px; }
+
+/* ── ALERT ── */
+#alrt {
+  position:fixed; top:35%; left:50%; transform:translate(-50%,-50%);
+  z-index:30; pointer-events:none;
+  font-size:clamp(10px,2.8vw,13px); letter-spacing:0.32em; color:#FC3D21;
+  border:1px solid rgba(252,61,33,0.3); background:rgba(252,61,33,0.07);
+  padding:9px 22px; opacity:0; text-shadow:0 0 14px #FC3D21;
+}
+@keyframes afl { 0%,100%{opacity:0} 30%,70%{opacity:1} }
+
+/* ── TOUCH BUTTONS ── z-index 50, nothing above them during flight ── */
+#btns {
+  position:fixed; bottom:0; left:0; right:0; z-index:50;
+  display:none;
+  padding:8px 8px calc(env(safe-area-inset-bottom,0px) + 8px);
+  background:linear-gradient(to top, rgba(0,0,8,0.92) 60%, transparent);
+  flex-wrap:wrap; justify-content:center; gap:8px;
+}
+#btns.show { display:flex; }
+.btn {
+  width:clamp(66px,21vw,88px); height:clamp(56px,15vw,70px);
+  background:rgba(4,10,28,0.95); border:1px solid rgba(201,168,76,0.35);
+  border-radius:8px; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:4px;
+  cursor:pointer; -webkit-appearance:none; touch-action:manipulation;
+  transition:background 0.15s, border-color 0.15s;
+}
+.btn:active, .btn.fl { background:rgba(252,61,33,0.22); border-color:#FC3D21; }
+.btn.tfl { background:rgba(0,200,200,0.16); border-color:#00C8C8; }
+.bi { font-size:clamp(20px,5.5vw,26px); line-height:1; }
+.bl { font-size:clamp(6px,1.7vw,8.5px); letter-spacing:0.08em; color:rgba(255,255,255,0.5); text-transform:uppercase; }
+
+/* ── ARRIVAL ── */
+#arrival {
+  position:fixed; inset:0; z-index:100;
+  background:radial-gradient(ellipse at 50% 35%, #071220 0%, #000 100%);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:28px; text-align:center; overflow-y:auto;
+  opacity:0; pointer-events:none; transition:opacity 1.5s;
+}
+#arrival.show { opacity:1; pointer-events:all; }
+.at { font-size:clamp(28px,10vw,68px); font-weight:900; letter-spacing:0.15em; color:#fff; }
+.aw { font-size:clamp(13px,3.5vw,22px); color:#C9A84C; font-style:italic; letter-spacing:0.2em; margin-top:8px; }
+.al { width:140px; height:1px; background:rgba(201,168,76,0.3); margin:22px auto; }
+.as { display:flex; gap:clamp(18px,5vw,44px); justify-content:center; flex-wrap:wrap; }
+.as .n { font-size:clamp(24px,8vw,46px); font-weight:900; color:#00C8C8; }
+.as .l { font-size:clamp(7px,2vw,9px); letter-spacing:0.32em; color:rgba(255,255,255,0.38); margin-top:2px; }
+.aq { font-style:italic; font-size:clamp(10px,2.6vw,13px); color:rgba(255,255,255,0.32); max-width:420px; line-height:1.85; margin:20px auto 0; }
+#btn-replay {
+  margin-top:26px; padding:12px 38px;
+  background:transparent; border:1px solid #C9A84C; color:#C9A84C;
+  font-size:clamp(10px,2.8vw,12px); letter-spacing:0.4em; text-transform:uppercase;
+  cursor:pointer; -webkit-appearance:none; transition:background 0.2s;
+}
+#btn-replay:active { background:rgba(201,168,76,0.14); }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="intro">
+  <div class="logo-ring"><span class="star-icon">✦</span></div>
+  <div class="nasa-text"><span>N</span><span>A</span><span>S</span><span>A</span></div>
+  <div class="mission-name">AURORA</div>
+  <div class="mission-info">MISSION DSP-2157 · KEPLER-452b · 1,400 LIGHT YEARS</div>
+  <div class="mission-desc">Navigate the photon-class vessel Aurora through debris fields, comet storms and nebulae.</div>
+  <button id="btn-start">⚡ LAUNCH</button>
+  <div class="hint">TAP BUTTONS · SWIPE SCREEN · PINCH FOR WARP</div>
+</div>
+
+<div id="hud">
+  <div class="hud-row">
+    <div class="hud-col">HULL<br><span id="h-hull" class="v">100%</span><br>STATUS<br><span id="h-status" class="v">NOMINAL</span></div>
+    <div class="hud-col hud-mid">PHASE<br><span id="h-phase" class="v">—</span><br>SECTOR<br><span id="h-sector" class="v">SOL</span></div>
+    <div class="hud-col hud-rt">SPEED<br><span id="h-vel" class="v">0.00c</span><br>ETA<br><span id="h-eta" class="v">—</span></div>
+  </div>
+</div>
+
+<div id="progbar"><div id="progfill"></div></div>
+
+<div id="narr"></div>
+<div id="pf"><div class="pn" id="pf-n"></div><div class="ps" id="pf-s"></div></div>
+<div id="alrt">⚠ HULL IMPACT</div>
+
+<div id="btns">
+  <button class="btn" id="b-warp">  <span class="bi">⚡</span><span class="bl">WARP</span></button>
+  <button class="btn" id="b-evade"> <span class="bi">↕</span><span class="bl">EVADE</span></button>
+  <button class="btn" id="b-shield"><span class="bi">🛡</span><span class="bl">SHIELD</span></button>
+  <button class="btn" id="b-scan">  <span class="bi">🔭</span><span class="bl">SCAN</span></button>
+  <button class="btn" id="b-pause"> <span class="bi" id="pause-icon">⏸</span><span class="bl">PAUSE</span></button>
+</div>
+
+<div id="arrival">
+  <div class="at">MISSION<br>COMPLETE</div>
+  <div class="aw">Kepler-452b — New Earth</div>
+  <div class="al"></div>
+  <div class="as">
+    <div><div class="n">1,400</div><div class="l">LIGHT YEARS</div></div>
+    <div><div class="n" id="a-hits">0</div><div class="l">IMPACTS</div></div>
+    <div><div class="n" id="a-hull">100%</div><div class="l">HULL LEFT</div></div>
+  </div>
+  <div class="aq">"That's one small step for a photon drive — one giant leap for humanity."<br>— Cdr. Elena Vasquez, 2157</div>
+  <button id="btn-replay">FLY AGAIN</button>
+</div>
+
+<script>
+// ══ CANVAS ════════════════════════════════════════
+const cvs = document.getElementById('c');
+const ctx = cvs.getContext('2d');
+let W, H;
+function resize() { W = cvs.width = innerWidth; H = cvs.height = innerHeight; }
+resize();
+addEventListener('resize', resize);
+
+// ══ STATE ═════════════════════════════════════════
+let S = {};
+function resetState() {
+  S = {
+    running:false, paused:false, tick:0, progress:0,
+    hull:100, hits:0, phase:'idle', velocity:0,
+    warp:0, shield:0, evading:0,
+    rocketY:0, targetY:0,
+    nebula:0, nebulaHue:200, dark:false,
+    lastPhase:'', shownPhases:new Set(),
+  };
+}
+resetState();
+
+// ══ STARS ═════════════════════════════════════════
+const STARS = Array.from({length:520}, () => ({
+  x: Math.random()*2000-1000, y: Math.random()*2000-1000,
+  z: Math.random()*2000, tw: Math.random()*Math.PI*2
+}));
+
+// ══ OBSTACLES ═════════════════════════════════════
+let obs = [], sparks = [], lastSpawn = 0;
+const shownNarrs = new Set();
+
+function spawn(type) {
+  if (type==='rock') obs.push({
+    type, active:true,
+    x:W+80, y:H*(0.1+Math.random()*0.8),
+    vx:-(3+Math.random()*4), vy:(Math.random()-0.5)*2.5,
+    size:10+Math.random()*20, rot:Math.random()*Math.PI*2,
+    spin:(Math.random()-0.5)*0.1, sides:3+Math.floor(Math.random()*3),
+    hue:190+Math.random()*40
+  });
+  else if (type==='comet') obs.push({
+    type, active:true,
+    x:W+120, y:Math.random()*H,
+    vx:-(7+Math.random()*5), vy:(Math.random()-0.5)*2,
+    size:5+Math.random()*5, tail:110+Math.random()*110
+  });
+  else if (type==='planet') obs.push({
+    type, active:true,
+    x:W+280, y:H*(0.15+Math.random()*0.7),
+    vx:-(0.35+Math.random()*0.3), vy:0,
+    size:50+Math.random()*100, hue:Math.floor(Math.random()*360),
+    rings:Math.random()>0.5
+  });
+}
+
+function addSparks(x,y) {
+  for (let i=0;i<12;i++) sparks.push({
+    x,y, vx:(Math.random()-0.5)*10, vy:(Math.random()-0.5)*10,
+    life:1, hue:20+Math.random()*30
+  });
+}
+
+// ══ PHASES ════════════════════════════════════════
+const PHASES = [
+  {n:'launch',   s:0.00,e:0.12, lbl:'DEPARTURE',      sub:'ENGINES AT 100%'},
+  {n:'cruise',   s:0.12,e:0.30, lbl:'LIGHT SPEED',    sub:'INTERSTELLAR CRUISE'},
+  {n:'debris',   s:0.30,e:0.48, lbl:'DEBRIS FIELD',   sub:'NAVIGATE WITH CARE'},
+  {n:'darkzone', s:0.48,e:0.62, lbl:'DARK ZONE',      sub:'ZERO VISIBILITY'},
+  {n:'comet',    s:0.62,e:0.74, lbl:'COMET STORM',    sub:'INCOMING ICE GIANTS'},
+  {n:'nebula',   s:0.74,e:0.88, lbl:'NEBULA',         sub:'CATHEDRAL OF LIGHT'},
+  {n:'approach', s:0.88,e:1.00, lbl:'FINAL APPROACH', sub:'KEPLER-452b AHEAD'},
+];
+const SECTORS = ['Sol System','Orion Arm','Sagittarius Spur','Perseus Arm','Deep Void','Cygnus Reach','Kepler Sector'];
+const NARRS = [
+  {at:0.01, t:'Engines ignited. For the first time, humanity sets course for the stars.'},
+  {at:0.08, t:'Warp velocity achieved. Light bends around the Aurora like water around a stone.'},
+  {at:0.16, t:'The sun is now just another star behind us. Twelve crew sleep in cryo-stasis.'},
+  {at:0.32, t:'Debris field detected. Remnants of a solar system that never formed.'},
+  {at:0.50, t:'All light disappears. We enter a void no photon has crossed in a billion years.'},
+  {at:0.63, t:'Comets — ancient messengers of ice — streak past like lanterns lit for our journey.'},
+  {at:0.76, t:'A nebula unfolds ahead, vast as a cathedral built from dying stars.'},
+  {at:0.90, t:'Long-range sensors confirm a pale blue dot. Kepler-452b. Our new home.'},
+  {at:0.97, t:'Aurora descends through amber clouds. The crew awakens. We are here.'},
+];
+
+// ══ DRAW STARFIELD ════════════════════════════════
+function drawStars() {
+  ctx.fillStyle = S.dark ? '#000003' : '#00000D';
+  ctx.fillRect(0,0,W,H);
+  const spd = S.warp > 0 ? 0 : S.velocity*0.5+0.2;
+  for (const s of STARS) {
+    s.tw += 0.016;
+    s.z  -= spd*4;
+    if (s.z <= 0) { s.z=2000; s.x=Math.random()*2000-1000; s.y=Math.random()*2000-1000; }
+    const sx = (s.x/s.z)*W+W/2, sy = (s.y/s.z)*H+H/2;
+    if (sx<0||sx>W||sy<0||sy>H) continue;
+    const r  = (1-s.z/2000)*2.5;
+    const br = (0.3+0.7*Math.abs(Math.sin(s.tw))) * (S.dark?0.08:1) * (1-S.nebula*0.35);
+    ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2);
+    ctx.fillStyle = `rgba(255,255,255,${br})`; ctx.fill();
+  }
+}
+
+// ══ DRAW NEBULA ═══════════════════════════════════
+function drawNebula() {
+  if (S.nebula<=0) return;
+  const g = ctx.createRadialGradient(W*.4,H*.5,0,W*.5,H*.5,W*.75);
+  g.addColorStop(0,`hsla(${S.nebulaHue},75%,38%,${S.nebula*.35})`);
+  g.addColorStop(0.5,`hsla(${S.nebulaHue+50},60%,28%,${S.nebula*.15})`);
+  g.addColorStop(1,'transparent');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  for (let i=0;i<5;i++) {
+    const wx=W*(.1+i*.18), wy=H*(.25+Math.sin(S.tick*.004+i*1.1)*.3);
+    const wg=ctx.createRadialGradient(wx,wy,0,wx,wy,100+i*24);
+    wg.addColorStop(0,`hsla(${S.nebulaHue+i*28},85%,55%,${S.nebula*.2})`);
+    wg.addColorStop(1,'transparent');
+    ctx.fillStyle=wg; ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ══ DRAW DARK ZONE ════════════════════════════════
+function drawDark() {
+  if (!S.dark) return;
+  ctx.fillStyle=`rgba(0,0,5,${.88+.08*Math.sin(S.tick*.006)})`; ctx.fillRect(0,0,W,H);
+  if (Math.random()<.025) {
+    const gx=Math.random()*W, gy=Math.random()*H;
+    const gg=ctx.createRadialGradient(gx,gy,0,gx,gy,18);
+    gg.addColorStop(0,'rgba(70,120,255,.1)'); gg.addColorStop(1,'transparent');
+    ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(gx,gy,18,0,Math.PI*2); ctx.fill();
+  }
+}
+
+// ══ DRAW WARP STREAKS ═════════════════════════════
+const STREAKS = Array.from({length:120}, ()=>({
+  a:Math.random()*Math.PI*2, d:30+Math.random()*280,
+  l:80+Math.random()*180, sp:0.5+Math.random()*1.5
+}));
+function drawWarp() {
+  if (S.warp<=0) return;
+  ctx.save(); ctx.globalAlpha=S.warp;
+  for (const s of STREAKS) {
+    s.d += s.sp*(1+S.warp*14);
+    if (s.d>700) s.d=8+Math.random()*40;
+    const x1=W/2+Math.cos(s.a)*s.d, y1=H/2+Math.sin(s.a)*s.d;
+    const x2=W/2+Math.cos(s.a)*(s.d+s.l*S.warp), y2=H/2+Math.sin(s.a)*(s.d+s.l*S.warp);
+    const wg=ctx.createLinearGradient(x1,y1,x2,y2);
+    wg.addColorStop(0,'transparent'); wg.addColorStop(1,`rgba(200,220,255,${S.warp*.85})`);
+    ctx.strokeStyle=wg; ctx.lineWidth=0.5+S.warp;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
+  if (S.warp>.4) {
+    const fg=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,200);
+    fg.addColorStop(0,`rgba(180,210,255,${(S.warp-.4)*.45})`); fg.addColorStop(1,'transparent');
+    ctx.fillStyle=fg; ctx.fillRect(0,0,W,H);
+  }
+  ctx.restore();
+}
+
+// ══ DRAW ROCKET ═══════════════════════════════════
+function drawRocket() {
+  const ry = H/2 + S.rocketY;
+  ctx.save(); ctx.translate(W/2, ry);
+
+  // Shield
+  if (S.shield>0) {
+    const sa=S.shield/180;
+    const sg=ctx.createRadialGradient(0,0,50,0,0,95);
+    sg.addColorStop(0,'transparent');
+    sg.addColorStop(0.7,`rgba(0,200,200,${sa*.12})`);
+    sg.addColorStop(1,`rgba(0,200,200,${sa*.36})`);
+    ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(0,0,95,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=`rgba(0,200,200,${sa*.5})`; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,0,90,0,Math.PI*2); ctx.stroke();
+  }
+
+  // Engine glow
+  const eg=ctx.createRadialGradient(-26,0,0,-26,0,52);
+  eg.addColorStop(0,`rgba(80,160,255,${.3+.18*Math.sin(S.tick*.35)})`);
+  eg.addColorStop(1,'transparent');
+  ctx.fillStyle=eg; ctx.fillRect(-80,-52,96,104);
+
+  // Plume
+  const pl=28+S.velocity*95+S.warp*130;
+  const pg=ctx.createLinearGradient(-20,0,-20-pl,0);
+  pg.addColorStop(0,'rgba(120,190,255,.95)');
+  pg.addColorStop(0.4,'rgba(70,130,255,.4)');
+  pg.addColorStop(1,'transparent');
+  ctx.fillStyle=pg; ctx.beginPath();
+  ctx.moveTo(-20,-9+Math.sin(S.tick*.22)*2);
+  ctx.quadraticCurveTo(-20-pl*.5,0,-20-pl,Math.sin(S.tick*.17)*7);
+  ctx.quadraticCurveTo(-20-pl*.5,0,-20,9+Math.sin(S.tick*.22+1)*2);
+  ctx.fill();
+
+  // Nose cone
+  ctx.fillStyle='#c8d5e8';
+  ctx.beginPath(); ctx.moveTo(44,0); ctx.lineTo(-20,-16); ctx.lineTo(-20,16); ctx.closePath(); ctx.fill();
+  // Highlight
+  ctx.fillStyle='rgba(255,255,255,.22)';
+  ctx.beginPath(); ctx.moveTo(44,0); ctx.lineTo(22,-8); ctx.lineTo(22,0); ctx.closePath(); ctx.fill();
+  // Fuselage
+  ctx.fillStyle='#aab9cc'; ctx.fillRect(-22,-12,44,24);
+  ctx.fillStyle='rgba(255,255,255,.1)'; ctx.fillRect(-10,-11,42,8);
+  // NASA stripe
+  ctx.fillStyle='rgba(11,61,145,.85)'; ctx.fillRect(-14,-2,38,10);
+  ctx.fillStyle='rgba(252,61,33,.75)'; ctx.fillRect(-14,-2,38,4);
+  // Wings
+  ctx.fillStyle='#738090';
+  ctx.beginPath(); ctx.moveTo(4,-12); ctx.lineTo(-20,-32); ctx.lineTo(-20,-12); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(4,12);  ctx.lineTo(-20,32);  ctx.lineTo(-20,12);  ctx.closePath(); ctx.fill();
+  // Engine block
+  ctx.fillStyle='#4d5866'; ctx.fillRect(-26,-14,10,28);
+  ctx.fillStyle='#333c4a'; ctx.beginPath(); ctx.arc(-21,0,10,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=`hsl(${210+Math.sin(S.tick*.5)*22},85%,${46+Math.sin(S.tick*.3)*18}%)`;
+  ctx.beginPath(); ctx.arc(-21,0,5.5,0,Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+// ══ DRAW OBSTACLES ════════════════════════════════
+function poly(x,y,n,r,a) {
+  ctx.beginPath();
+  for (let i=0;i<n;i++) { const t=(i/n)*Math.PI*2+a; i?ctx.lineTo(x+Math.cos(t)*r,y+Math.sin(t)*r):ctx.moveTo(x+Math.cos(t)*r,y+Math.sin(t)*r); }
+  ctx.closePath();
+}
+function drawObs() {
+  for (const o of obs) {
+    if (!o.active) continue;
+    if (o.type==='rock') {
+      o.x+=o.vx; o.y+=o.vy; o.rot+=o.spin;
+      const dg=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.size*1.7);
+      dg.addColorStop(0,`hsla(${o.hue},50%,65%,.15)`); dg.addColorStop(1,'transparent');
+      ctx.fillStyle=dg; ctx.beginPath(); ctx.arc(o.x,o.y,o.size*1.7,0,Math.PI*2); ctx.fill();
+      ctx.save(); ctx.translate(o.x,o.y); ctx.rotate(o.rot);
+      poly(0,0,o.sides,o.size,0);
+      ctx.fillStyle=`hsl(${o.hue},25%,40%)`; ctx.fill();
+      ctx.strokeStyle='rgba(210,230,255,.18)'; ctx.lineWidth=0.8; ctx.stroke();
+      ctx.restore();
+      if (o.x<-100||o.y<-100||o.y>H+100) o.active=false;
+    } else if (o.type==='comet') {
+      o.x+=o.vx; o.y+=o.vy;
+      const tg=ctx.createLinearGradient(o.x,o.y,o.x+o.tail,o.y);
+      tg.addColorStop(0,'rgba(200,230,255,.9)'); tg.addColorStop(.4,'rgba(150,200,255,.3)'); tg.addColorStop(1,'transparent');
+      ctx.strokeStyle=tg; ctx.lineWidth=o.size*.65;
+      ctx.beginPath(); ctx.moveTo(o.x,o.y); ctx.lineTo(o.x+o.tail,o.y+o.vy*7); ctx.stroke();
+      const hg=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.size*3);
+      hg.addColorStop(0,'rgba(255,255,255,1)'); hg.addColorStop(.4,'rgba(200,230,255,.75)'); hg.addColorStop(1,'transparent');
+      ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(o.x,o.y,o.size*3,0,Math.PI*2); ctx.fill();
+      if (o.x<-250) o.active=false;
+    } else if (o.type==='planet') {
+      o.x+=o.vx;
+      const ag=ctx.createRadialGradient(o.x,o.y,o.size*.8,o.x,o.y,o.size*1.5);
+      ag.addColorStop(0,`hsla(${o.hue},60%,55%,.18)`); ag.addColorStop(1,'transparent');
+      ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(o.x,o.y,o.size*1.5,0,Math.PI*2); ctx.fill();
+      const pg=ctx.createRadialGradient(o.x-o.size*.3,o.y-o.size*.3,0,o.x,o.y,o.size);
+      pg.addColorStop(0,`hsl(${o.hue},52%,68%)`); pg.addColorStop(.6,`hsl(${o.hue},40%,38%)`); pg.addColorStop(1,`hsl(${o.hue},30%,14%)`);
+      ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(o.x,o.y,o.size,0,Math.PI*2); ctx.fill();
+      ctx.save(); ctx.beginPath(); ctx.arc(o.x,o.y,o.size,0,Math.PI*2); ctx.clip();
+      for (let b=0;b<4;b++) { ctx.fillStyle=`hsla(${o.hue+20},45%,62%,.12)`; ctx.fillRect(o.x-o.size,o.y-o.size*.5+b*o.size*.35,o.size*2,o.size*.1); }
+      ctx.restore();
+      if (o.rings) {
+        ctx.strokeStyle=`hsla(${o.hue+30},50%,70%,.45)`; ctx.lineWidth=8;
+        ctx.beginPath(); ctx.ellipse(o.x,o.y,o.size*1.9,o.size*.35,Math.PI/14,0,Math.PI*2); ctx.stroke();
+        ctx.strokeStyle=`hsla(${o.hue+40},50%,78%,.2)`; ctx.lineWidth=5;
+        ctx.beginPath(); ctx.ellipse(o.x,o.y,o.size*2.2,o.size*.44,Math.PI/14,0,Math.PI*2); ctx.stroke();
+      }
+      if (o.x<-400) o.active=false;
+    }
+  }
+  obs = obs.filter(o=>o.active);
+}
+
+// ══ SPARKS ════════════════════════════════════════
+function drawSparks() {
+  for (const s of sparks) {
+    s.x+=s.vx; s.y+=s.vy; s.life-=0.04;
+    if (s.life<=0) continue;
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.life*4,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${s.hue},100%,${55+s.life*20}%,${s.life})`; ctx.fill();
+  }
+  sparks = sparks.filter(s=>s.life>0);
+}
+
+// ══ COLLISION CHECK ═══════════════════════════════
+function collide() {
+  const ry=H/2+S.rocketY, rx=W/2;
+  const hitR = S.shield>0?90 : S.evading>0?28 : 52;
+  for (const o of obs) {
+    if (!o.active||o.type!=='rock') continue;
+    const dx=o.x-rx, dy=o.y-ry;
+    if (Math.sqrt(dx*dx+dy*dy) < hitR+o.size*.6) {
+      o.active=false;
+      S.hull = Math.max(0, S.hull-(S.shield>0?.3:S.evading>0?.8:3));
+      S.hits++;
+      addSparks(rx,ry);
+      doFlashAlert();
+    }
+  }
+}
+
+// ══ HUD ═══════════════════════════════════════════
+function updateHUD() {
+  const hull=Math.round(S.hull);
+  const hEl=document.getElementById('h-hull');
+  const sEl=document.getElementById('h-status');
+  hEl.textContent=hull+'%';
+  hEl.className=(hull<50?'vc':hull<75?'vw':'v');
+  sEl.textContent=hull<50?'CRITICAL':hull<75?'CAUTION':'NOMINAL';
+  sEl.className=(hull<50?'vc':hull<75?'vw':'v');
+  document.getElementById('h-vel').textContent=S.velocity.toFixed(2)+'c';
+  document.getElementById('h-eta').textContent=S.phase==='approach'?'IMMINENT':Math.round((1-S.progress)*145)+' min';
+  const ph=PHASES.find(p=>S.progress>=p.s&&S.progress<p.e);
+  document.getElementById('h-phase').textContent=ph?ph.lbl:'TRANSIT';
+  const si=Math.min(Math.floor(S.progress*SECTORS.length),SECTORS.length-1);
+  document.getElementById('h-sector').textContent=SECTORS[si].split(' ')[0];
+  document.getElementById('progfill').style.width=(S.progress*100)+'%';
+}
+
+// ══ NARRATION / PHASE FLASH ═══════════════════════
+let nT, pfT;
+function narrate(t) {
+  const el=document.getElementById('narr');
+  el.textContent=t; el.classList.add('show');
+  clearTimeout(nT); nT=setTimeout(()=>el.classList.remove('show'),5500);
+}
+function flashPhase(lbl,sub) {
+  document.getElementById('pf-n').textContent=lbl;
+  document.getElementById('pf-s').textContent=sub;
+  const el=document.getElementById('pf');
+  el.classList.add('show'); clearTimeout(pfT);
+  pfT=setTimeout(()=>el.classList.remove('show'),3000);
+}
+function doFlashAlert() {
+  const el=document.getElementById('alrt');
+  el.style.animation='none'; void el.offsetWidth;
+  el.style.animation='afl .9s ease';
+}
+
+// ══ ACTIONS ═══════════════════════════════════════
+function actWarp()   { S.warp=Math.min(1,S.warp+0.42); btnFlash('b-warp'); }
+function actEvade()  { S.evading=70; S.hull=Math.min(100,S.hull+2); S.targetY=(Math.random()<.5?-1:1)*H*.28; btnFlash('b-evade'); }
+function actShield() { S.shield=180; btnFlash('b-shield'); }
+function actScan()   { btnFlash('b-scan'); const pool={debris:['Carbonaceous asteroid — 4.6 billion year old relic.','Iron-nickel shard — protoplanet core fragment.'],comet:['Oort Cloud comet — ice and dust.','Extrasolar interloper — unbounded orbit.'],nebula:['Emission nebula — stellar nursery 70 ly across.','Planetary nebula — glowing shell of a dying star.'],darkzone:['Cosmic void — dark matter density 85%. No light detected.'],approach:['Rocky super-Earth — possible liquid water.','Gas giant — 79 moons confirmed.']}; const p=pool[S.phase]||pool.approach; narrate(p[Math.floor(Math.random()*p.length)]); }
+function actPause()  { S.paused=!S.paused; document.getElementById('pause-icon').textContent=S.paused?'▶':'⏸'; }
+
+function btnFlash(id) {
+  const el=document.getElementById(id); if(!el) return;
+  el.classList.add('fl'); setTimeout(()=>el.classList.remove('fl'),400);
+}
+
+// ══ WIRE BUTTONS ══════════════════════════════════
+// touchstart + preventDefault = instant on iPhone, no 300ms delay, no ghost clicks
+function wire(id, fn) {
+  const el=document.getElementById(id); if(!el) return;
+  let fired=false;
+  el.addEventListener('touchstart', e=>{
+    e.preventDefault(); fired=true; fn();
+  },{passive:false});
+  el.addEventListener('click', ()=>{ if(fired){fired=false;return;} fn(); });
+}
+wire('btn-start',  startGame);
+wire('btn-replay', resetGame);
+wire('b-warp',   actWarp);
+wire('b-evade',  actEvade);
+wire('b-shield', actShield);
+wire('b-scan',   actScan);
+wire('b-pause',  actPause);
+
+// ══ KEYBOARD ══════════════════════════════════════
+addEventListener('keydown', e=>{
+  if(e.code==='Space'){e.preventDefault(); S.running?actWarp():startGame();}
+  if(e.code==='KeyW') actWarp();
+  if(e.code==='KeyE') actEvade();
+  if(e.code==='KeyD') actShield();
+  if(e.code==='KeyS') actScan();
+  if(e.code==='KeyP') actPause();
+});
+
+// ══ CANVAS SWIPE ══════════════════════════════════
+// Canvas is z-index 0. Buttons are z-index 50. Buttons always win touches.
+// Swipes only fire when touching the canvas directly (i.e. not over any button).
+(function(){
+  let tx=0,ty=0,done=false,pd=0;
+  cvs.addEventListener('touchstart',e=>{
+    done=false;
+    if(e.touches.length===2) pd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    else { tx=e.touches[0].clientX; ty=e.touches[0].clientY; }
+  },{passive:true});
+  cvs.addEventListener('touchmove',e=>{
+    if(!S.running||done) return;
+    if(e.touches.length===2){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      if(Math.abs(d-pd)>50){done=true;actWarp();} return;
+    }
+    const dx=e.touches[0].clientX-tx, dy=e.touches[0].clientY-ty;
+    if(Math.abs(dx)<22&&Math.abs(dy)<22) return;
+    done=true;
+    if(Math.abs(dy)>Math.abs(dx)) dy<0?actWarp():actEvade();
+    else dx>0?actShield():actScan();
+  },{passive:true});
+  cvs.addEventListener('touchend',()=>{done=false;},{passive:true});
+})();
+
+// ══ MAIN LOOP ═════════════════════════════════════
+let raf;
+function loop() {
+  raf=requestAnimationFrame(loop);
+  drawStars();
+  if(!S.running||S.paused) return;
+
+  S.tick++;
+  S.progress=Math.min(1,S.progress+0.000125);
+
+  // phase
+  const ph=PHASES.find(p=>S.progress>=p.s&&S.progress<p.e);
+  const pn=ph?ph.n:'done';
+  if(pn!==S.lastPhase) {
+    S.phase=pn; S.lastPhase=pn;
+    if(ph&&!S.shownPhases.has(pn)){S.shownPhases.add(pn);flashPhase(ph.lbl,ph.sub);}
+  }
+
+  // per-phase updates
+  if     (S.phase==='launch')  {S.velocity=Math.min(1,S.velocity+.004);S.warp=Math.min(1,S.warp+.012);S.dark=false;}
+  else if(S.phase==='cruise')  {S.velocity=1;S.warp=Math.max(0,S.warp-.006);S.dark=false;}
+  else if(S.phase==='debris')  {S.velocity=.82;S.warp=0;S.dark=false;}
+  else if(S.phase==='darkzone'){S.velocity=.58;S.warp=0;S.dark=true;}
+  else if(S.phase==='comet')   {S.velocity=.88;S.warp=0;S.dark=false;S.nebula=Math.max(0,S.nebula-.003);}
+  else if(S.phase==='nebula')  {S.velocity=.72;S.warp=0;S.dark=false;S.nebula=Math.min(.85,S.nebula+.004);S.nebulaHue+=.04;}
+  else if(S.phase==='approach'){S.velocity=Math.max(.1,S.velocity-.002);S.warp=0;S.dark=false;S.nebula=Math.max(0,S.nebula-.004);}
+
+  S.warp    = Math.max(0,S.warp-.002);
+  S.hull    = Math.min(100,S.hull+.012);
+  S.shield  = Math.max(0,S.shield-1);
+  S.evading = Math.max(0,S.evading-1);
+
+  // smooth rocket position
+  S.rocketY += (S.targetY-S.rocketY)*0.08;
+
+  // spawn
+  const t=S.tick;
+  if(S.phase==='debris' &&t-lastSpawn>45){spawn('rock');lastSpawn=t;if(Math.random()<.4)spawn('rock');}
+  if(S.phase==='comet'  &&t-lastSpawn>90){spawn('comet');lastSpawn=t;}
+  if(S.phase==='nebula' &&Math.random()<.003) spawn('planet');
+  if(S.phase==='cruise' &&Math.random()<.002) spawn('planet');
+  if(S.phase==='approach'&&Math.random()<.005) spawn('planet');
+
+  // narration
+  for(const n of NARRS){if(!shownNarrs.has(n.at)&&S.progress>=n.at){shownNarrs.add(n.at);narrate(n.t);}}
+
+  collide();
+  drawNebula(); drawDark(); drawWarp(); drawObs(); drawSparks(); drawRocket(); updateHUD();
+
+  if(S.progress>=1&&S.phase!=='done_shown'){S.phase='done_shown';setTimeout(endGame,2500);}
+}
+
+// ══ FLOW ══════════════════════════════════════════
+function startGame() {
+  resetState();
+  shownNarrs.clear(); obs=[]; sparks=[]; lastSpawn=0;
+  S.running=true;
+  document.getElementById('intro').classList.add('hide');
+  setTimeout(()=>document.getElementById('intro').style.display='none',1100);
+  document.getElementById('hud').classList.add('show');
+  document.getElementById('btns').classList.add('show');
+  if(raf) cancelAnimationFrame(raf);
+  requestAnimationFrame(loop);
+}
+
+function endGame() {
+  document.getElementById('hud').classList.remove('show');
+  document.getElementById('btns').classList.remove('show');
+  document.getElementById('a-hits').textContent=S.hits;
+  document.getElementById('a-hull').textContent=Math.round(S.hull)+'%';
+  document.getElementById('arrival').classList.add('show');
+}
+
+function resetGame() {
+  document.getElementById('arrival').classList.remove('show');
+  const intro=document.getElementById('intro');
+  intro.style.display='flex';
+  requestAnimationFrame(()=>intro.classList.remove('hide'));
+  S.running=false;
+  document.getElementById('hud').classList.remove('show');
+  document.getElementById('btns').classList.remove('show');
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
